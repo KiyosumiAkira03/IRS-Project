@@ -78,13 +78,15 @@ $$
 h_1 & 0 & 0 & ... & 0 \\
 0 & h_2 & 0 & ... & 0 \\
 ... \\
-0 & 0 & 0 & ... & h_n \\
+0 & 0 & 0 & ... & h_n 
 \end{bmatrix}
+$$
+$$
 \begin{bmatrix}
 G_{11} & G_{12} & ... & G1N \\
 G_{21} & G_{22} & ... & G2N \\
 ...  \\
-G_{M1} & G_{M2} & ... & GMN \\
+G_{M1} & G_{M2} & ... & GMN 
 \end{bmatrix}
 $$   
 $\rightarrow$ $diag(h^H_r) * G * w$ represents the actual physical wave that survives in the reflection process through the IRS to user.
