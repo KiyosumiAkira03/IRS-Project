@@ -9,10 +9,10 @@ using namespace std;
 // +/ bin pow?
 const int N_ELEMENTS = 40;           
 const int POPULATION_SIZE = 100;    
-const int GENERATIONS = 500;         
+const int GENERATIONS = 1000;         
 const double MUTATION_RATE = 0.1;    
 const double PI = 3.14159265358979323846;
-const double Gaussian_Noise = 1e-11;
+const double Gaussian_Noise = 1e-12;
 // (from the paper)
 const double BETA_MIN = 0.2;
 const double K = 1.6;
@@ -99,12 +99,12 @@ void evaluate_fitness(Individual& index, const vector<double>& Psi, const vector
         double theta = index.phases[n];
         double beta = amplitude(theta);
         
-        double term1 = beta * beta * Psi[n];
+        double term1 = pow(beta, 2) * Psi[n];
         double term2 = beta * phi_mag[n] * cos(phi_arg[n] - theta);
         
         total_signal += (term1 + term2);
     }
-    index.fitness = log2(1.0 + total_signal);
+    index.fitness = log2(1.0 + (total_signal / pow(Gaussian_Noise, 2)));
 }
 
 // Create population
