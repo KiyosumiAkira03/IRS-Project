@@ -2,6 +2,7 @@
 
 Nguyen Hoang Minh - 202517030 - Minh.NH2517030@sis.hust.edu.vn
 
+Bui Huy Hoang - 2025xxxxx - Hoang.BH25xxxxx@sis.hust.edu.vn
 ## 1. Paper summarize
 
 An Intelligent Reflecting Surface (IRS) is an array of passive electromagnetic elements capable of dynamically altering the phase shifts of incoming radio waves. By automatically reconfiguring these reflections, an IRS can control the wireless propagation environment to boost signal strength at a receiver. 
@@ -78,15 +79,13 @@ $$
 h_1 & 0 & 0 & ... & 0 \\
 0 & h_2 & 0 & ... & 0 \\
 ... \\
-0 & 0 & 0 & ... & h_n 
+0 & 0 & 0 & ... & h_n \\
 \end{bmatrix}
-$$
-$$
 \begin{bmatrix}
 G_{11} & G_{12} & ... & G1N \\
 G_{21} & G_{22} & ... & G2N \\
 ...  \\
-G_{M1} & G_{M2} & ... & GMN 
+G_{M1} & G_{M2} & ... & GMN \\
 \end{bmatrix}
 $$   
 $\rightarrow$ $diag(h^H_r) * G * w$ represents the actual physical wave that survives in the reflection process through the IRS to user.
@@ -120,7 +119,7 @@ However, because both the formula for $Z_n$ and $v_n$ are nested and non-linear.
 
 The ultimate goal still remains the same:
 
-$$\max_{\mathbf{w}, \mathbf{v}, \{\theta_{n}\}} |(\mathbf{v}^{H}\mathbf{\Psi}+\mathbf{h}_d^H)\mathbf{w}|^{2}$$$$\text{s.t.} \quad \|\mathbf{w}\|_2^2 \le P_T \quad \text{(7)}$$$$v_n = \beta_n(\theta_n)e^{j\theta_n}, \quad \forall n \quad \text{(8)}$$$$-\pi \le \theta_n \le \pi, \quad \forall n \quad \text{(9)}$$
+$$\max_{\mathbf{w}, \mathbf{v}, \{\theta_{n}\}} |(\mathbf{v}^{H}\mathbf{\phi}+\mathbf{h}_d^H)\mathbf{w}|^{2}$$$$\text{s.t.} \quad \|\mathbf{w}\|_2^2 \le P_T \quad \text{(7)}$$$$v_n = \beta_n(\theta_n)e^{j\theta_n}, \quad \forall n \quad \text{(8)}$$$$-\pi \le \theta_n \le \pi, \quad \forall n \quad \text{(9)}$$
 
 in which:
 $$ \quad \beta_{n}(\theta_{n})=(1-\beta_{min})\left(\frac{sin(\theta_{n}-\phi)+1}{2}\right)^{k}+\beta_{min}$$
@@ -128,5 +127,49 @@ is the amplitude of each element, calculated directly with a phase shift $\theta
 
 Because optimizing all variables at once is mathematically non-convex and highly complex, the authors use **Alternating Optimization (AO)**. They hold the Access Point beamforming ($\mathbf{w}$) and $N-1$ IRS elements fixed, isolating just one single IRS element ($n$) at a time, solve for the optimal phase shift for each, rinse and repeat.
 
-When an element is isolated, the problem shrinks down into:$$\max_{\theta_{n}} \beta_{n}^{2}(\theta_{n})\Psi_{n,n} + \beta_{n}(\theta_{n})|\varphi_{n}|\cos(\arg(\varphi_{n})-\theta_{n})$$$$\text{s.t.} \quad -\pi \le \theta_n \le \pi$$
+Notice that for any given phase shift $v$, it is known that the maximum-ratio transmission (MRT) is the optimal transmit
+beamforming solution to (P1), i.e., $w_{max} = \sqrt{P_T} * {(v^HΦ+h^H_d)^H \over ||v^HΦ+h^H_d||}$
 
+Therefore the only remaining problem is to maximize $v$
+
+When an element is isolated, the problem shrinks down into:
+$$\max_{\theta_{n}} \beta_{n}^{2}(\theta_{n})\Psi_{n,n} + \beta_{n}(\theta_{n})|\varphi_{n}|\cos(\arg(\varphi_{n})-\theta_{n})$$$$\text{s.t.} \quad arg(\varphi_n) \le \theta_n \le (-1)^\lambda\pi$$
+
+If we consider $\beta_n(\theta_n)$ as a variable, the equation looks just like a quadratic equation, which when graphed would yield the shape of a parabola. We take the starting point ($\theta_A = arg(\varphi)$), the middle point (($\theta_B = {arg(\varphi) + (-1)^\lambda\pi \over 2}$)), and the endpoint ($\theta_C = (-1)^\lambda\pi$) to construct a "pseudo" quadratic equation. After that, we take the derivative $df \over d\theta_n$ to acquire the stationary point:
+$$\theta_n = {(-1)^\lambda\pi(3f_1-4f_2+f_3) + arg(\varphi_n)(f_1-4f_2+3f_3) \over 4(f_1-2f_2+f_3)}$$
+
+which concludes the final solution of maximizing $v$
+
+## 5. Evolution Strategy
+The problem still remain the same compared to the AO Algorithm:
+
+$$\max_{\mathbf{v}, \{\theta_{n}\}} f(v) =| (\mathbf{v}^{H}\mathbf{\phi}+\mathbf{h}_d^H)|^{2}$$$$\text{s.t.} \quad v_n = \beta_n(\theta_n)e^{j\theta_n}, \quad \forall n \quad $$$$-\pi \le \theta_n \le \pi, \quad \forall n $$
+
+in which:
+$$ \quad \beta_{n}(\theta_{n})=(1-\beta_{min})\left(\frac{sin(\theta_{n}-\phi)+1}{2}\right)^{k}+\beta_{min}$$
+
+omitting the $w$ term because we already know $w_{max}$
+
+By treating the configuration of each IRS ($v$) as one individual in a generation, the maximum acheivable rate of that individual as the fitness, with a noise mutation $\sigma$ to evolve the phase shifts of each configuration, the task transforms into an **evolution process**, in which the configurations yielding weak rate will die out over time, leaving only the strongest configurations.
+
+Let the initial population size $M$, population array $V$, amount of generation $K$, and mutation noise $sigma$
+Pseudocode:
+```
+for generation = 1 to K
+    successive_mutation = 0;
+    for v_i in V:
+        parent = v_i
+        child = v_i + sigma
+
+        if f(child) > f(parent):
+            swap(parent, child)
+            successive_mutation++
+    
+    //1/5th rule
+    if successive_mutation / M >= 20%:
+        increase sigma
+    else 
+        decrease sigma
+            
+    
+```
