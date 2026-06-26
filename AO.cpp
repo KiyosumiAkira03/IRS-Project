@@ -4,6 +4,12 @@ using namespace std;
 #define ld long double
 const ll mod = 1e9 + 7;
 
+random_device rd;
+mt19937 gen(rd());
+uniform_real_distribution<> phase_gacha(-M_PI, M_PI);
+uniform_real_distribution<> percen_gacha(0.0, 1.0); 
+uniform_real_distribution<> rayleigh(0.5, 1.5); 
+
 struct comp // A * e^(i * phi) = A(cos(phi) + i * sin(phi))
 {
     ld A; // amplitude
@@ -159,20 +165,34 @@ Matrix mult(Matrix A, Matrix B)
 int main()
 {
 	ios_base::sync_with_stdio(0); cin.tie(0); cout.tie(0);
-    ll n, m;
+    ll n, m; // m: AP element n: IRS element
     cin >> n >> m;
-    Matrix A;
-    A.prep(n, m);
 
-    for (ll i = 0; i < n; ++i)
+    Matrix h_d, h_r, G; // h_d: AP-to-user (Mx1) h_r: IRS-to-user (Nx1) G: AP-to-IRS (MxN)
+    h_d.prep(m, 1); h_r.prep(n, 1); G.prep(m, n);
+
+    for (ll i = 0; i < h_d.row; ++i)
     {
-        for (ll j = 0; j < m; ++j)
+        for (ll j = 0; j < h_d.col; ++j)
         {
-            cin >> A.a[i][j].A >> A.a[i][j].phi;    
+            h_d.a[i][j] = {2.6 * 1e-7 * rayleigh(gen), phase_gacha(gen)};
         }
     }
-    A.show();
-    Matrix B = mult(A, A);
-    B.show();
+
+    for (ll i = 0; i < h_r.row; ++i)
+    {
+        for (ll j = 0; j < h_r.col; ++j)
+        {
+            h_r.a[i][j] = {2.6 * 1e-3 * rayleigh(gen), phase_gacha(gen)};
+        }
+    }
+
+    for (ll i = 0; i < G.row; ++i)
+    {
+        for (ll j = 0; j < G.col; ++j)
+        {
+            G.a[i][j] = {2.6 * 1e-6 * rayleigh(gen), phase_gacha(gen)};
+        }
+    }
     
 }
