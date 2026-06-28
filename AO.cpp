@@ -7,6 +7,10 @@ const ll mod = 1e9 + 7;
 const ld BETA_MIN = 0.2; // 0.2
 const ld K = 1.6; // 1.6
 const ld noise = 1e-12;
+const ld L1 = 2.5e-9;   // nH
+const ld L2 = 0.7e-9;   // nH 
+const ld Z0 = 377.0;    // ohm
+const ld freq = 2.4e9;  // GHz
 
 random_device rd;
 mt19937 gen(rd());
@@ -18,7 +22,27 @@ struct comp // A * e^(i * theta) = A(cos(theta) + i * sin(theta))
 {
     ld A; // amplitude
     ld theta; // phase
-};  
+}; 
+
+struct standardComp // a + bi
+{
+    ld real;
+    ld img;
+};
+
+standardComp convertFromEuler(comp a)
+{
+    return {a.A * cos(a.theta), a.A * sin(a.theta)};
+}
+
+comp convertToEuler(standardComp a)
+{
+    ld A = sqrt(a.real * a.real + a.img * a.img);
+    ld theta = atan2(a.img, a.real);
+    if (theta < 0) theta += 2 * M_PI; 
+
+    return {A, theta};
+}
 
 struct Matrix 
 {
@@ -51,9 +75,6 @@ struct Matrix
         
     }
 
-    // 1 1 1 --> 1 0 0
-    //           0 1 0 
-    //           0 0 1
     void diag()
     {
         if (row != 1 && col != 1) return; 
@@ -137,6 +158,11 @@ comp sumComplex(comp a, comp b)
 comp multComplex(comp a, comp b)
 {
     return {a.A * b.A, a.theta + b.theta};
+}
+
+comp divComplex(comp a, comp b)
+{
+    return {a.A / b.A, a.theta - b.theta};
 }
 
 Matrix mult(Matrix A, Matrix B)
@@ -242,14 +268,13 @@ int main()
     v.prep(n, 1);
     for (ll i = 0; i < n; ++i)
     {
-        // standard IRS setup, initial amplitude beta = 1.0, random phase
-        v.a[i][0] = {1.0L, phase_gacha(gen)}; 
+        ld init_theta = phase_gacha(gen);
+        v.a[i][0] = {beta(init_theta), init_theta};  
     }
-    for (ll cnt = 0; cnt < 10; ++cnt)
+    for (ll cnt = 0; cnt < 100  ; ++cnt)
     {
         for (ll i = 0; i < n; ++i)
         {
-            // Calculate phi_n
             comp phi = Hat_h_d.a[i][0];
             phi.A *= 2;
             comp tmp = {0, 0};
@@ -273,10 +298,39 @@ int main()
             ld max_theta = pow(-1, lambda) * M_PI * (3*f1 - 4*f2 + f3) + phi.theta * (f1 - 4*f2 + 3*f3);
             max_theta /= 4*(f1 - 2*f2 + f3);
 
+            // chuan hoa
+            while (max_theta > M_PI) max_theta -= 2 * M_PI;
+            while (max_theta < -M_PI) max_theta += 2 * M_PI;
+
             //cout << max_theta << ' ' << phi.theta << '\n';
             v.a[i][0].theta = max_theta;
+            v.a[i][0].A = beta(max_theta);
         }
         cout << calculateRate(v, h_r, G, h_d, noise) << ' ';
     }
+
+
+    vector<ld> R(n), C(n);
+    ld omega = 2.0 * M_PI * freq;
+
+    for (ll i = 0; i < n; ++i)
+    {
+        v.a[i][0].A = min(v.a[i][0].A, 0.99999L);
+        // Zn = Z0 * (1 + Vn) / (1 - Vn)
+        standardComp Z1 = convertFromEuler(v.a[i][0]);
+        Z1.real += 1.0L;
+        standardComp Z2 = convertFromEuler(v.a[i][0]);
+        Z2.real = 1.0L - Z2.real;
+        Z2.img *= -1;
+        standardComp Z = convertFromEuler(divComplex(convertToEuler(Z1), convertToEuler(Z2)));
+        Z.real *= Z0;
+        Z.img *= Z0;
+
+        R[i] = Z.real;
+        C[i] = max(0.0L, 1.0L / (omega * ((omega * L1) - Z.img)));
+        cout << R[i] << " Ohm, " << C[i] * 1e12 << " pF\n";
+    }
+
+
     
 }
