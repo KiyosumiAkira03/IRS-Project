@@ -211,39 +211,27 @@ ld f(comp phi, Matrix Psi, ld theta, ll n)
     ld beta_term = beta(theta);
     return beta_term * beta_term * Psi.a[n][n].A + beta_term * phi.A * cos(phi.theta - theta);
 }
-
 ld calculateRate(Matrix& v, Matrix& h_r, Matrix& G, Matrix& h_d, ld noise_power)
 {
-    Matrix Hv = v;
-    Hv.hermitian();
-    
-    Matrix Hh_d = h_d;
-    Hh_d.hermitian();
+    Matrix Hv = v; Hv.hermitian();
+    Matrix Hh_d = h_d; Hh_d.hermitian();
 
     Matrix phi = h_r;
     phi.hermitian();
     phi.diag();
     phi = mult(phi, G);
 
-    Matrix power = sum(mult(Hv, phi), Hh_d);
+    // h_eff^H = v^H * Phi + h_d^H
+    Matrix h_eff_H = sum(mult(Hv, phi), Hh_d);
     
-    Matrix w_en = sum(mult(Hv, phi), Hh_d);
-    w_en.hermitian();
-    Matrix w_de = sum(mult(Hv, phi), Hh_d);
-    comp tmp = {0.0L, 0.0L};
-    //w_de.show();
-    for (ll i = 0; i < w_de.col; ++i) tmp = sumComplex(tmp, multComplex(w_de.a[0][i], w_de.a[0][i]));
-    tmp.A = sqrt(tmp.A);
-    tmp.theta /= 2.0L;
-
-    for (ll i = 0; i < w_en.row; ++i) 
+    //  P_T * ||h_eff||^2
+    ld norm_sq = 0.0L;
+    for (ll i = 0; i < h_eff_H.col; ++i) 
     {
-        w_en.a[i][0] = divComplex(w_en.a[i][0], tmp);
-        w_en.a[i][0].A *= sqrt(PT);
+        norm_sq += h_eff_H.a[0][i].A * h_eff_H.a[0][i].A;
     }
 
-    power = mult(power, w_en);
-    return log2(1.0 + ((power.a[0][0].A * power.a[0][0].A) / (noise_power)));
+    return log2(1.0L + ((PT * norm_sq) / noise_power));
 }
 
 ld getPathLoss(ld distance, ld exponent) {
@@ -251,143 +239,114 @@ ld getPathLoss(ld distance, ld exponent) {
     ld ref_loss_linear = pow(10, -ref_loss_db / 10.0);
     return ref_loss_linear * pow(distance, -exponent);
 }
-
 int main()
 {
-	//ios_base::sync_with_stdio(0); cin.tie(0); cout.tie(0);
-    ll n, m; // m: AP element n: IRS element
-    cin >> n >> m;
+    ll n = 40; // IRS elements
+    ll m = 2;  // AP antennas
 
-    Matrix h_d, h_r, G; // h_d: AP-to-user (Mx1) h_r: IRS-to-user (Nx1) G: AP-to-IRS (MxN)
+    Matrix h_d, h_r, G; 
     h_d.prep(m, 1); h_r.prep(n, 1); G.prep(n, m);
 
-    for (ld d = 480; d <= 500; d += 5) 
+    vector<ld> dist;
+    vector<ld> AR;
+    for (ld d = 480; d <= 500; d += 1) 
     {
-        ld d_ap_user = d;
-        ld d_ap_irs = 500; 
-        ld d_irs_user = d / 2.0;
+        ld d_ap_irs = 500.0; 
+        ld d_ap_user = sqrt(d * d + 2.0 * 2.0);
+        ld d_irs_user = sqrt((500.0 - d) * (500.0 - d) + 2.0 * 2.0);
         
-        // Exponents from the paper (2.2, 2.8, 3.8)
         ld h_d_gain = sqrt(getPathLoss(d_ap_user, 3.8));
         ld G_gain = sqrt(getPathLoss(d_ap_irs, 2.2));
         ld h_r_gain = sqrt(getPathLoss(d_irs_user, 2.8));
 
-        for (ll i = 0; i < h_d.row; ++i)
-        {
-            for (ll j = 0; j < h_d.col; ++j)
-            {
-                h_d.a[i][j] = {h_d_gain * rayleigh(gen), phase_gacha(gen)};
-            }
-        }
-
-        for (ll i = 0; i < h_r.row; ++i)
-        {
-            for (ll j = 0; j < h_r.col; ++j)
-            {
-                h_r.a[i][j] = {h_r_gain * rayleigh(gen), phase_gacha(gen)};
-            }
-        }
-
-        for (ll i = 0; i < G.row; ++i)
-        {
-            for (ll j = 0; j < G.col; ++j)
-            {
-                G.a[i][j] = {G_gain * rayleigh(gen), phase_gacha(gen)};
-            }
-        }
-
-        Matrix Hh_r = h_r, diagh_r = h_r, Hdiagh_r = h_r;
-        diagh_r.diag();
-
-        Hdiagh_r.hermitian();
-        Hdiagh_r.diag();
-
-        Hh_r.hermitian();
-
-        Matrix HG = G;
-        HG.hermitian();
-
-        Matrix Psi = mult(mult(mult(Hdiagh_r, G), HG), diagh_r);
-        Matrix Hat_h_d = mult(mult(Hdiagh_r, G), h_d);
-        //Hat_h_d.show();
-        //Psi.show();
-
-        Matrix v;
-        v.prep(n, 1);
         ld total_rate = 0.0L;
-        for (ll i = 0; i < n; ++i)
+        ll num_trials = 1000; // monte-carlo
+
+        for (ll trial = 0; trial < num_trials; ++trial)
         {
-            ld init_theta = phase_gacha(gen);
-            v.a[i][0] = {beta(init_theta), init_theta};  
-        }
-        for (ll cnt = 0; cnt < 100; ++cnt)
-        {
+            for (ll i = 0; i < h_d.row; ++i)
+                for (ll j = 0; j < h_d.col; ++j)
+                    h_d.a[i][j] = {h_d_gain * rayleigh(gen), phase_gacha(gen)};
+
+            for (ll i = 0; i < h_r.row; ++i)
+                for (ll j = 0; j < h_r.col; ++j)
+                    h_r.a[i][j] = {h_r_gain * rayleigh(gen), phase_gacha(gen)};
+
+            for (ll i = 0; i < G.row; ++i)
+                for (ll j = 0; j < G.col; ++j)
+                    G.a[i][j] = {G_gain * rayleigh(gen), phase_gacha(gen)};
+
+
+            Matrix Hh_r = h_r, diagh_r = h_r, Hdiagh_r = h_r;
+            diagh_r.diag();
+            Hdiagh_r.hermitian();
+            Hdiagh_r.diag();
+            Hh_r.hermitian();
+
+            Matrix HG = G;
+            HG.hermitian();
+
+            Matrix Psi = mult(mult(mult(Hdiagh_r, G), HG), diagh_r);
+            Matrix Hat_h_d = mult(mult(Hdiagh_r, G), h_d);
+
+            Matrix v;
+            v.prep(n, 1);
             for (ll i = 0; i < n; ++i)
             {
-                comp phi = Hat_h_d.a[i][0];
-                comp tmp = {0, 0};
-
-                for (ll j = 0; j < n; ++j)
-                {
-                    if (j == i) continue;
-                    tmp = sumComplex(tmp, multComplex(Psi.a[i][j], v.a[j][0]));
-                }
-                phi = sumComplex(phi, tmp);
-                phi.A *= 2;
-                while (phi.theta > M_PI) phi.theta -= 2 * M_PI;
-                while (phi.theta < -M_PI) phi.theta += 2 * M_PI;
-                //if (phi.theta > M_PI) phi.theta -= 2 * M_PI;
-
-                
-                // 3 points: arg(phi_n) / arg(phi_n) + (-1)^lambda*pi :2 / (-1)^lambda*pi
-                // lambda = 0 if arg(phi_n) >= 0, = 1 otherwise
-                // f(comp phi, Matrix Psi, ld theta, ll n)
-
-                ld f1 = f(phi, Psi, phi.theta, i);
-                ll lambda = (phi.theta >= 0) ? 0 : 1;
-                ld f3 = f(phi, Psi, pow(-1, lambda) * M_PI, i);
-                ld f2 = f(phi, Psi, (phi.theta + pow(-1, lambda) * M_PI) / 2.0, i);
-
-                ld max_theta = pow(-1, lambda) * M_PI * (3*f1 - 4*f2 + f3) + phi.theta * (f1 - 4*f2 + 3*f3);
-                max_theta /= 4*(f1 - 2*f2 + f3);
-
-                // chuan hoa
-                while (max_theta > M_PI) max_theta -= 2 * M_PI;
-                while (max_theta < -M_PI) max_theta += 2 * M_PI;
-
-                //cout << max_theta << ' ' << phi.theta << '\n';
-                v.a[i][0].theta = max_theta;
-                v.a[i][0].A = beta(max_theta);
+                ld init_theta = (percen_gacha(gen) > 0.5) ? M_PI : -M_PI;
+                v.a[i][0] = {beta(init_theta), init_theta};  
             }
+
+            for (ll cnt = 0; cnt < 15; ++cnt) 
+            {
+                for (ll i = 0; i < n; ++i)
+                {
+                    comp phi = Hat_h_d.a[i][0];
+                    comp tmp = {0, 0};
+
+                    for (ll j = 0; j < n; ++j)
+                    {
+                        if (j == i) continue;
+                        tmp = sumComplex(tmp, multComplex(Psi.a[i][j], v.a[j][0]));
+                    }
+                    phi = sumComplex(phi, tmp);
+                    phi.A *= 2.0L;
+                    
+                    while (phi.theta > M_PI) phi.theta -= 2.0L * M_PI;
+                    while (phi.theta < -M_PI) phi.theta += 2.0L * M_PI;
+
+                    ld f1 = f(phi, Psi, phi.theta, i);
+                    ll lambda = (phi.theta >= 0) ? 0 : 1;
+                    ld f3 = f(phi, Psi, pow(-1, lambda) * M_PI, i);
+                    ld f2 = f(phi, Psi, (phi.theta + pow(-1, lambda) * M_PI) / 2.0, i);
+
+                    ld den = 4.0L * (f1 - 2.0L*f2 + f3);
+                    ld max_theta = phi.theta;
+                    if (abs(den) > 1e-9L) {
+                        max_theta = pow(-1, lambda) * M_PI * (3.0L*f1 - 4.0L*f2 + f3) + phi.theta * (f1 - 4.0L*f2 + 3.0L*f3);
+                        max_theta /= den;
+                    }
+
+                    while (max_theta > M_PI) max_theta -= 2.0L * M_PI;
+                    while (max_theta < -M_PI) max_theta += 2.0L * M_PI;
+
+                    v.a[i][0].theta = max_theta;
+                    v.a[i][0].A = beta(max_theta);
+                }
+            }
+            
             total_rate += calculateRate(v, h_r, G, h_d, noise);
-            //cout << calculateRate(v, h_r, G, h_d, noise) << ' ';
         }
 
-        //cout << total_rate / 100 <<'\n';
-        // vector<ld> R(n), C(n);
-        // ld omega = 2.0 * M_PI * freq;
-
-        // for (ll i = 0; i < n; ++i)
-        // {
-        //     v.a[i][0].A = min(v.a[i][0].A, 0.99999L);
-        //     // Zn = Z0 * (1 + Vn) / (1 - Vn)
-        //     standardComp Z1 = convertFromEuler(v.a[i][0]);
-        //     Z1.real += 1.0L;
-        //     standardComp Z2 = convertFromEuler(v.a[i][0]);
-        //     Z2.real = 1.0L - Z2.real;
-        //     Z2.img *= -1;
-        //     standardComp Z = convertFromEuler(divComplex(convertToEuler(Z1), convertToEuler(Z2)));
-        //     Z.real *= Z0;
-        //     Z.img *= Z0;
-
-        //     R[i] = Z.real;
-        //     C[i] = max(0.0L, 1.0L / (omega * ((omega * L1) - Z.img)));
-        //     cout << R[i] << " Ohm, " << C[i] * 1e12 << " pF\n";
-        // }
+        dist.push_back(d);
+        AR.push_back((total_rate / num_trials));
+        // Print Ergodic Capacity
+        //cout << "Distance d = " << d << "m | Achievable Rate = " << (total_rate / num_trials) << " bits/s/Hz\n";
     }
 
-    for (ll i = 480; i <= 500; ++i) cout << i << ", ";
 
-
-    
+    for (auto i: dist) cout << i << ", ";
+    cout << '\n';
+    for (auto i: AR) cout << i << ", ";
+    return 0;
 }
