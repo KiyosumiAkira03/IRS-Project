@@ -260,7 +260,7 @@ int main()
         ld h_r_gain = sqrt(getPathLoss(d_irs_user, 2.8));
 
         ld total_rate = 0.0L;
-        ll num_trials = 1000; // monte-carlo
+        ll num_trials = 10; // monte-carlo
 
         for (ll trial = 0; trial < num_trials; ++trial)
         {
@@ -291,10 +291,17 @@ int main()
 
             Matrix v;
             v.prep(n, 1);
+
+            // Ideal IRS: start amplitude = 1; end amplitutde = 1;
+            // Practical IRS with Ideal Assumption: start amplitude = 1; end amplitutde = beta(theta);
             for (ll i = 0; i < n; ++i)
             {
                 ld init_theta = (percen_gacha(gen) > 0.5) ? M_PI : -M_PI;
-                v.a[i][0] = {beta(init_theta), init_theta};  
+                // Ideal IRS - Practical IRS with Ideal Assumption
+                v.a[i][0] = {1.0L, init_theta};
+
+                // AO with Proposition 1 - AO with 1D search
+                //v.a[i][0] = {beta(init_theta), init_theta};  
             }
 
             for (ll cnt = 0; cnt < 15; ++cnt) 
@@ -314,23 +321,26 @@ int main()
                     
                     while (phi.theta > M_PI) phi.theta -= 2.0L * M_PI;
                     while (phi.theta < -M_PI) phi.theta += 2.0L * M_PI;
+
+                    // Upper Bound: Ideal IRS
+                    ld max_theta = phi.theta;
                     
                     // 1D Search from -PI to PI
-
-                    ld max_val = -1e18L;
-                    ld max_theta = v.a[i][0].theta;
+                    // ld max_val = -1e18L;
+                    // ld max_theta = v.a[i][0].theta;
  
-                    for (ll step = 0; step <= SEARCH_STEPS; ++step) 
-                    {
-                        ld test_theta = -M_PI + (2.0L * M_PI * step / SEARCH_STEPS);
-                        ld current_f = f(phi, Psi, test_theta, i);
+                    // for (ll step = 0; step <= SEARCH_STEPS; ++step) 
+                    // {
+                    //     ld test_theta = -M_PI + (2.0L * M_PI * step / SEARCH_STEPS);
+                    //     ld current_f = f(phi, Psi, test_theta, i);
                         
-                        if (current_f > max_val) 
-                        {
-                            max_val = current_f;
-                            max_theta = test_theta;
-                        }
-                    }
+                    //     if (current_f > max_val) 
+                    //     {
+                    //         max_val = current_f;
+                    //         max_theta = test_theta;
+                    //     }
+                    // }
+
                     // Proposition 1
                     // ld f1 = f(phi, Psi, phi.theta, i);
                     // ll lambda = (phi.theta >= 0) ? 0 : 1;
@@ -348,22 +358,25 @@ int main()
                     while (max_theta < -M_PI) max_theta += 2.0L * M_PI;
 
                     v.a[i][0].theta = max_theta;
-                    v.a[i][0].A = beta(max_theta);
+                    v.a[i][0].A = 1.0L;
+                    // Practical IRS under Ideal Assumption
+                    // v.a[i][0].A = beta(max_theta);
                 }
             }
-            
+            for (ll i = 0; i < n; ++i) {
+                    v.a[i][0].A = beta(v.a[i][0].theta); 
+                }
             total_rate += calculateRate(v, h_r, G, h_d, noise);
         }
 
         dist.push_back(d);
         AR.push_back((total_rate / num_trials));
-        // Print Ergodic Capacity
-        //cout << "Distance d = " << d << "m | Achievable Rate = " << (total_rate / num_trials) << " bits/s/Hz\n";
+        //cout << "Done: d = " << d << '\n';
     }
 
 
-    for (auto i: dist) cout << i << ", ";
-    cout << '\n';
+    // for (auto i: dist) cout << i << ", ";
+    // cout << '\n';
     for (auto i: AR) cout << i << ", ";
     return 0;
 }
