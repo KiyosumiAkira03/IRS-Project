@@ -314,18 +314,35 @@ int main()
                     
                     while (phi.theta > M_PI) phi.theta -= 2.0L * M_PI;
                     while (phi.theta < -M_PI) phi.theta += 2.0L * M_PI;
+                    
+                    // 1D Search from -PI to PI
 
-                    ld f1 = f(phi, Psi, phi.theta, i);
-                    ll lambda = (phi.theta >= 0) ? 0 : 1;
-                    ld f3 = f(phi, Psi, pow(-1, lambda) * M_PI, i);
-                    ld f2 = f(phi, Psi, (phi.theta + pow(-1, lambda) * M_PI) / 2.0, i);
-
-                    ld den = 4.0L * (f1 - 2.0L*f2 + f3);
-                    ld max_theta = phi.theta;
-                    if (abs(den) > 1e-9L) {
-                        max_theta = pow(-1, lambda) * M_PI * (3.0L*f1 - 4.0L*f2 + f3) + phi.theta * (f1 - 4.0L*f2 + 3.0L*f3);
-                        max_theta /= den;
+                    ld max_val = -1e18L;
+                    ld max_theta = v.a[i][0].theta;
+ 
+                    for (ll step = 0; step <= SEARCH_STEPS; ++step) 
+                    {
+                        ld test_theta = -M_PI + (2.0L * M_PI * step / SEARCH_STEPS);
+                        ld current_f = f(phi, Psi, test_theta, i);
+                        
+                        if (current_f > max_val) 
+                        {
+                            max_val = current_f;
+                            max_theta = test_theta;
+                        }
                     }
+                    // Proposition 1
+                    // ld f1 = f(phi, Psi, phi.theta, i);
+                    // ll lambda = (phi.theta >= 0) ? 0 : 1;
+                    // ld f3 = f(phi, Psi, pow(-1, lambda) * M_PI, i);
+                    // ld f2 = f(phi, Psi, (phi.theta + pow(-1, lambda) * M_PI) / 2.0, i);
+
+                    // ld den = 4.0L * (f1 - 2.0L*f2 + f3);
+                    // ld max_theta = phi.theta;
+                    // if (abs(den) > 1e-9L) {
+                    //     max_theta = pow(-1, lambda) * M_PI * (3.0L*f1 - 4.0L*f2 + f3) + phi.theta * (f1 - 4.0L*f2 + 3.0L*f3);
+                    //     max_theta /= den;
+                    // }
 
                     while (max_theta > M_PI) max_theta -= 2.0L * M_PI;
                     while (max_theta < -M_PI) max_theta += 2.0L * M_PI;
