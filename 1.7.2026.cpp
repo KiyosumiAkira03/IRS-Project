@@ -17,7 +17,6 @@ const double PHI_CONST = 0.43 * PI;
 const double PT = pow(10.0, (36 - 30.0) / 10.0);
 const double NOISE_POWER = pow(10.0, (-94 - 30.0) / 10.0);
 
-// --- CẤU TRÚC SỐ PHỨC VÀ MA TRẬN (Tận dụng từ code gốc) ---
 struct comp {
     double A;     // Biên độ (Amplitude)
     double theta; // Pha (Phase)
@@ -60,15 +59,13 @@ const double ALPHA_AP_IRS = 2.2;
 const double C0 = 1e-4;
 const double d_AP_IRS = 500.0;
 
-// Đưa bộ sinh số ngẫu nhiên ra ngoài làm biến toàn cục (hoặc truyền vào hàm) 
-// để tránh việc khởi tạo lại liên tục gây hao tổn tài nguyên và trùng seed
 random_device rd;
 mt19937 gen(rd());
 uniform_real_distribution<> rayleigh(0.5, 1.5);
 uniform_real_distribution<> phase_dist(-PI, PI);
 uniform_real_distribution<> prob_dist(0.0, 1.0);
 
-void init_channels(double d_AP_USER) {
+void init_channels(double d_AP_USER, int N_ELEMENTS) {
     // 1. Tính toán khoảng cách an toàn (tránh số âm và lỗi chia cho 0)
     double d_IRS_USER = abs(d_AP_IRS - d_AP_USER);
     if (d_IRS_USER < 1.0) d_IRS_USER = 1.0; // Nếu User đứng sát IRS, mặc định khoảng cách là 1m (do chênh lệch độ cao ăng-ten)
