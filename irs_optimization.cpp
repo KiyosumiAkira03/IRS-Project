@@ -17,8 +17,7 @@ random_device rd;
 mt19937 gen(rd());
 uniform_real_distribution<> phase_gacha(-3.14159265358979323846, 3.14159265358979323846);
 uniform_real_distribution<> percen_gacha(0.0, 1.0); 
-uniform_real_distribution<> rayleigh(0.5, 1.5); 
-
+normal_distribution<> rayleigh(0.0, 1.0 / sqrt(2.0));
 struct comp // A * e^(i * theta) = A(cos(theta) + i * sin(theta))
 {
     ld A; // amplitude
@@ -239,18 +238,31 @@ ld getPathLoss(ld distance, ld exponent) {
     ld ref_loss_linear = pow(10, -ref_loss_db / 10.0);
     return ref_loss_linear * pow(distance, -exponent);
 }
+
+ld calculateNoIRSRate(Matrix& h_d, ld noise_power)
+{
+    ld norm_sq = 0.0L;
+    for (ll i = 0; i < h_d.row; ++i) 
+    {
+        norm_sq += h_d.a[i][0].A * h_d.a[i][0].A;
+    }
+    return log2(1.0L + ((PT * norm_sq) / noise_power));
+}
 int main()
 {
-    ll n = 40; // IRS elements
+    //ll n = 40; // IRS elements
     ll m = 2;  // AP antennas
-
-    Matrix h_d, h_r, G; 
-    h_d.prep(m, 1); h_r.prep(n, 1); G.prep(n, m);
 
     vector<ld> dist;
     vector<ld> AR;
-    for (ld d = 480; d <= 500; d += 1) 
+    //for (ld d = 480; d <= 500; d += 1) 
+    for (ll n = 10;  n <= 50; ++n)
     {
+        ld d = 498;
+        Matrix h_d, h_r, G; 
+        h_d.prep(m, 1); h_r.prep(n, 1); G.prep(n, m);
+
+        
         ld d_ap_irs = 500.0; 
         ld d_ap_user = sqrt(d * d + 2.0 * 2.0);
         ld d_irs_user = sqrt((500.0 - d) * (500.0 - d) + 2.0 * 2.0);
@@ -264,18 +276,25 @@ int main()
 
         for (ll trial = 0; trial < num_trials; ++trial)
         {
-            for (ll i = 0; i < h_d.row; ++i)
-                for (ll j = 0; j < h_d.col; ++j)
-                    h_d.a[i][j] = {h_d_gain * rayleigh(gen), phase_gacha(gen)};
+            for (ll i = 0; i < h_d.row; ++i) {
+                ld real = rayleigh(gen) * h_d_gain;
+                ld imag = rayleigh(gen) * h_d_gain;
+                h_d.a[i][0] = {sqrt(real*real + imag*imag), atan2(imag, real)};
+            }
 
-            for (ll i = 0; i < h_r.row; ++i)
-                for (ll j = 0; j < h_r.col; ++j)
-                    h_r.a[i][j] = {h_r_gain * rayleigh(gen), phase_gacha(gen)};
+            for (ll i = 0; i < h_r.row; ++i) {
+                ld real = rayleigh(gen) * h_r_gain;
+                ld imag = rayleigh(gen) * h_r_gain;
+                h_r.a[i][0] = {sqrt(real*real + imag*imag), atan2(imag, real)};
+            }
 
-            for (ll i = 0; i < G.row; ++i)
-                for (ll j = 0; j < G.col; ++j)
-                    G.a[i][j] = {G_gain * rayleigh(gen), phase_gacha(gen)};
-
+            for (ll i = 0; i < G.row; ++i) {
+                for (ll j = 0; j < G.col; ++j) {
+                    ld real = rayleigh(gen) * G_gain;
+                    ld imag = rayleigh(gen) * G_gain;
+                    G.a[i][j] = {sqrt(real*real + imag*imag), atan2(imag, real)};
+                }
+            }
 
             Matrix Hh_r = h_r, diagh_r = h_r, Hdiagh_r = h_r;
             diagh_r.diag();
@@ -298,10 +317,10 @@ int main()
             {
                 ld init_theta = (percen_gacha(gen) > 0.5) ? M_PI : -M_PI;
                 // Ideal IRS - Practical IRS with Ideal Assumption
-                v.a[i][0] = {1.0L, init_theta};
+                // v.a[i][0] = {1.0L, init_theta};
 
                 // AO with Proposition 1 - AO with 1D search
-                //v.a[i][0] = {beta(init_theta), init_theta};  
+                v.a[i][0] = {beta(init_theta), init_theta};  
             }
 
             for (ll cnt = 0; cnt < 15; ++cnt) 
@@ -323,7 +342,7 @@ int main()
                     while (phi.theta < -M_PI) phi.theta += 2.0L * M_PI;
 
                     // Upper Bound: Ideal IRS
-                    ld max_theta = phi.theta;
+                    //ld max_theta = phi.theta;
                     
                     // 1D Search from -PI to PI
                     // ld max_val = -1e18L;
@@ -341,37 +360,37 @@ int main()
                     //     }
                     // }
 
-                    // Proposition 1
-                    // ld f1 = f(phi, Psi, phi.theta, i);
-                    // ll lambda = (phi.theta >= 0) ? 0 : 1;
-                    // ld f3 = f(phi, Psi, pow(-1, lambda) * M_PI, i);
-                    // ld f2 = f(phi, Psi, (phi.theta + pow(-1, lambda) * M_PI) / 2.0, i);
+                    //Proposition 1
+                    ld f1 = f(phi, Psi, phi.theta, i);
+                    ll lambda = (phi.theta >= 0) ? 0 : 1;
+                    ld f3 = f(phi, Psi, pow(-1, lambda) * M_PI, i);
+                    ld f2 = f(phi, Psi, (phi.theta + pow(-1, lambda) * M_PI) / 2.0, i);
 
-                    // ld den = 4.0L * (f1 - 2.0L*f2 + f3);
-                    // ld max_theta = phi.theta;
-                    // if (abs(den) > 1e-9L) {
-                    //     max_theta = pow(-1, lambda) * M_PI * (3.0L*f1 - 4.0L*f2 + f3) + phi.theta * (f1 - 4.0L*f2 + 3.0L*f3);
-                    //     max_theta /= den;
-                    // }
+                    ld den = 4.0L * (f1 - 2.0L*f2 + f3);
+                    ld max_theta = phi.theta;
+                    if (abs(den) > 1e-9L) {
+                        max_theta = pow(-1, lambda) * M_PI * (3.0L*f1 - 4.0L*f2 + f3) + phi.theta * (f1 - 4.0L*f2 + 3.0L*f3);
+                        max_theta /= den;
+                    }
 
                     while (max_theta > M_PI) max_theta -= 2.0L * M_PI;
                     while (max_theta < -M_PI) max_theta += 2.0L * M_PI;
 
                     v.a[i][0].theta = max_theta;
-                    v.a[i][0].A = 1.0L;
+                    //v.a[i][0].A = 1.0L;
                     // Practical IRS under Ideal Assumption
-                    // v.a[i][0].A = beta(max_theta);
+                    v.a[i][0].A = beta(max_theta);
                 }
             }
-            for (ll i = 0; i < n; ++i) {
-                    v.a[i][0].A = beta(v.a[i][0].theta); 
-                }
-            total_rate += calculateRate(v, h_r, G, h_d, noise);
+            //for (ll i = 0; i < n; ++i) v.a[i][0].A = beta(v.a[i][0].theta);
+            //total_rate += calculateRate(v, h_r, G, h_d, noise);
+            // No IRS
+            total_rate += calculateNoIRSRate(h_d, noise);
         }
 
         dist.push_back(d);
         AR.push_back((total_rate / num_trials));
-        //cout << "Done: d = " << d << '\n';
+
     }
 
 
