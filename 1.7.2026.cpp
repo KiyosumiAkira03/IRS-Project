@@ -115,6 +115,9 @@ double run_evolution_strategy() {
 
     Individual best_overall = population[0];
 
+    // --- [1/5 RULE] Khởi tạo bước nhảy sigma ban đầu ---
+    double sigma = 0.2; 
+
     for (int g = 1; g <= GENERATIONS; ++g) {
         sort(population.begin(), population.end(), greater<Individual>());
 
@@ -129,6 +132,10 @@ double run_evolution_strategy() {
             next_gen.push_back(population[i]);
         }
 
+        // --- [1/5 RULE] Khởi tạo các biến đếm cho thế hệ này ---
+        int success_count = 0;
+        int total_children = 0;
+
         while (next_gen.size() < POPULATION_SIZE) {
             uniform_int_distribution<> parent_dist(0, 49);
             Individual p1 = population[parent_dist(gen)];
@@ -140,36 +147,51 @@ double run_evolution_strategy() {
                 child.phases[n] = (prob_dist(gen) < 0.5) ? p1.phases[n] : p2.phases[n];
                 
                 if (prob_dist(gen) < MUTATION_RATE) {
-                    child.phases[n] += phase_dist(gen) * 0.2; 
+                    // --- [1/5 RULE] Thay thế hằng số bằng biến động sigma ---
+                    child.phases[n] += phase_dist(gen) * sigma; 
                     if (child.phases[n] > PI) child.phases[n] -= 2*PI;
                     if (child.phases[n] < -PI) child.phases[n] += 2*PI;
                 }
             }
             evaluate(child);
+
+            // --- [1/5 RULE] Đếm số lượng đột biến thành công ---
+            total_children++;
+            if (child.fitness > max(p1.fitness, p2.fitness)) {
+                success_count++;
+            }
+
             next_gen.push_back(child);
         }
         population = next_gen;
+
+        // --- [1/5 RULE] Điều chỉnh sigma động ---
+        if (total_children > 0) {
+            double success_rate = (double)success_count / total_children;
+            if (success_rate > 0.2) {
+                sigma /= 0.85; 
+            } else if (success_rate < 0.2) {
+                sigma *= 0.85; 
+            }
+            sigma = max(0.001, min(sigma, 1.0));
+        }
+        
          //if (g % 100 == 0) {
-
             //cout << "Generation " << g << " | Best Rate: " << best_overall.fitness << " bps/Hz" << endl;
-
         //}
+        
     }
-     // 4. Kết quả cuối cùng
 
+    // 4. Kết quả cuối cùng
     //cout << "\n--- OPTIMIZATION COMPLETED ---" << endl;
-
     //cout << "Final Best Rate: " << best_overall.fitness << " bps/Hz" << endl;
-
     //cout << "Best Theta sequence (all 40 elements): " << endl;
-
     //for (int i = 0; i < 40; ++i) cout << best_overall.phases[i] << " ";
-
     //cout << endl;
+    
     return best_overall.fitness;
 }
 
-// --- CÁC BƯỚC CỦA EVOLUTION STRATEGY ---
 int main() { 
     // Khảo sát khoảng cách
     cout << "--- SURVEY DISTANCE ---" << endl;
