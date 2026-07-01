@@ -14,8 +14,8 @@ const double PI = 3.14159265358979323846;
 const double BETA_MIN = 0.2;
 const double K_CONST = 1.6;
 const double PHI_CONST = 0.43 * PI;
-const double PT = 3.98;         // Transmit power (36 dBm ~ 3.98W)
-const double NOISE_POWER = 3.98e-10; // Noise power (-94 dBm)
+const double PT = pow(10.0, (36 - 30.0) / 10.0);
+const double NOISE_POWER = pow(10.0, (-94 - 30.0) / 10.0);
 
 // --- CẤU TRÚC SỐ PHỨC VÀ MA TRẬN (Tận dụng từ code gốc) ---
 struct comp {
@@ -53,20 +53,29 @@ struct Individual {
 vector<comp> h_d; // AP-to-user (M x 1)
 vector<vector<comp>> Phi; // Ma trận kết hợp diag(h_r^H)*G (N x M)
 
-const double AP_USER = 3.8;
-const double IRS_USER = 2.8;
-const double AP_IRS = 2.2;
+// --- CẤU HÌNH KHOẢNG CÁCH VÀ SUY HAO ---
+const double ALPHA_AP_USER = 3.8; // Đổi tên để tránh nhầm với khoảng cách
+const double ALPHA_IRS_USER = 2.8;
+const double ALPHA_AP_IRS = 2.2;
 const double C0 = 1e-4;
 const double d_AP_IRS = 500.0;
 
-void init_channels(double d_AP_USER) {
-    random_device rd;
-    mt19937 gen(rd());
-    uniform_real_distribution<> rayleigh(0.5, 1.5);
-    uniform_real_distribution<> phase_dist(-PI, PI);
+// Đưa bộ sinh số ngẫu nhiên ra ngoài làm biến toàn cục (hoặc truyền vào hàm) 
+// để tránh việc khởi tạo lại liên tục gây hao tổn tài nguyên và trùng seed
+random_device rd;
+mt19937 gen(rd());
+uniform_real_distribution<> rayleigh(0.5, 1.5);
+uniform_real_distribution<> phase_dist(-PI, PI);
+uniform_real_distribution<> prob_dist(0.0, 1.0);
 
-    double path_loss_direct = sqrt(C0 * pow(d_AP_USER, -AP_USER));
-    double path_loss_cascaded = sqrt(C0 * pow(d_AP_IRS, -AP_IRS)) * sqrt(C0 * pow(d_AP_IRS - d_AP_USER, -IRS_USER));
+void init_channels(double d_AP_USER) {
+    // 1. Tính toán khoảng cách an toàn (tránh số âm và lỗi chia cho 0)
+    double d_IRS_USER = abs(d_AP_IRS - d_AP_USER);
+    if (d_IRS_USER < 1.0) d_IRS_USER = 1.0; // Nếu User đứng sát IRS, mặc định khoảng cách là 1m (do chênh lệch độ cao ăng-ten)
+
+    // 2. Tính toán Path Loss
+    double path_loss_direct = sqrt(C0 * pow(d_AP_USER, -ALPHA_AP_USER));
+    double path_loss_cascaded = sqrt(C0 * pow(d_AP_IRS, -ALPHA_AP_IRS)) * sqrt(C0 * pow(d_IRS_USER, -ALPHA_IRS_USER));
     
     h_d.resize(M_ANTENNAS);
     for (int m = 0; m < M_ANTENNAS; ++m) 
@@ -104,10 +113,6 @@ void evaluate(Individual& ind) {
 // --- CÁC BƯỚC CỦA EVOLUTION STRATEGY ---
 int main() { for (double d_AP_USER = 480.0; d_AP_USER <= 500.0; d_AP_USER += 2.5) {
     init_channels(d_AP_USER);
-    random_device rd;
-    mt19937 gen(rd());
-    uniform_real_distribution<> phase_dist(-PI, PI);
-    uniform_real_distribution<> prob_dist(0.0, 1.0);
 
     // 1. Sinh ngẫu nhiên 100 bộ tham số ban đầu
     vector<Individual> population(POPULATION_SIZE);
