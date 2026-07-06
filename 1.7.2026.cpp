@@ -67,12 +67,16 @@ uniform_real_distribution<> prob_dist(0.0, 1.0);
 
 void init_channels(double d_AP_USER) {
     // 1. Tính toán khoảng cách an toàn 
+    
     double d_IRS_USER = abs(d_AP_IRS - d_AP_USER);
     if (d_IRS_USER < 1.0) d_IRS_USER = 1.0; 
 
+    double d_AP_USER_true  = sqrt(d_AP_USER * d_AP_USER + 2.0 * 2.0);
+    double d_IRS_USER_true = sqrt((d_AP_IRS - d_AP_USER) * (d_AP_IRS - d_AP_USER) + 2.0 * 2.0);
+
     // 2. Tính toán Path Loss
-    double path_loss_direct = sqrt(C0 * pow(d_AP_USER, -ALPHA_AP_USER));
-    double path_loss_cascaded = sqrt(C0 * pow(d_AP_IRS, -ALPHA_AP_IRS)) * sqrt(C0 * pow(d_IRS_USER, -ALPHA_IRS_USER));
+    double path_loss_direct = sqrt(C0 * pow(d_AP_USER_true, -ALPHA_AP_USER));
+    double path_loss_cascaded = sqrt(C0 * pow(d_AP_IRS, -ALPHA_AP_IRS)) * sqrt(C0 * pow(d_IRS_USER_true, -ALPHA_IRS_USER));
     
     h_d.resize(M_ANTENNAS);
     for (int m = 0; m < M_ANTENNAS; ++m) 
