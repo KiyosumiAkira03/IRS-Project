@@ -91,11 +91,14 @@ void init_channels(double d_AP_USER) {
 }
 
 // Hàm đánh giá Fitness: Tính R_SE = log2(1 + SNR)
-void evaluate(Individual& ind) {
+void evaluate(Individual& ind) 
+{
     double total_norm_sq = 0;
-    for (int m = 0; m < M_ANTENNAS; ++m) {
+    for (int m = 0; m < M_ANTENNAS; ++m) 
+    {
         comp sum_m = {0, 0};
-        for (int n = 0; n < N_ELEMENTS; ++n) {
+        for (int n = 0; n < N_ELEMENTS; ++n) 
+        {
             double b_n = calculate_beta(ind.phases[n]);
             comp v_n_h = {b_n, -ind.phases[n]};
             sum_m = sumComplex(sum_m, multComplex(v_n_h, Phi[n][m]));
